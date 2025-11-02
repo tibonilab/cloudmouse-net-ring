@@ -21,10 +21,17 @@
 #pragma once
 #include <WebServer.h>
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include "WiFiManager.h"
+#include "../prefs/PreferencesManager.h"
+#include "../config/DeviceConfig.h"
+#include "../core/Events.h"
+#include "../core/EventBus.h"
 
 namespace CloudMouse::Network
 {
+    using namespace CloudMouse;
+
     class WebServerManager
     {
     public:
@@ -42,6 +49,9 @@ namespace CloudMouse::Network
          * Starts HTTP server on port 80
          */
         void init();
+
+        void initLanServices();
+
 
         /**
          * Process incoming HTTP requests
@@ -114,5 +124,8 @@ namespace CloudMouse::Network
          * Returns 404 error response
          */
         static void handleNotFound();
+
+        static void handleAlarmRing();
+        static void handleAlarmConfirmed();
     };
 };

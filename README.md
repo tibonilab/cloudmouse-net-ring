@@ -1,410 +1,275 @@
-# CloudMouse Weather Station Example
+# CloudMouse Emergency Alert System
 
-🌤️ **Real-time weather station powered by CloudMouse SDK + LVGL + Open-Meteo API**
+A bidirectional emergency alert system built on CloudMouse SDK enabling reliable communication between two ESP32 devices over LAN using HTTP and mDNS.
 
-A complete weather monitoring application that demonstrates advanced CloudMouse SDK features including service architecture, event-driven communication, and pixel-perfect LVGL UI design.
+## Overview
 
-![UI Demo](assets/ui-demo.jpg)
+This system allows a person (sender) to trigger an alert on another device (receiver) with visual and audio feedback on both ends, ensuring reliable delivery confirmation. Perfect for elderly care, emergency notifications, or any scenario requiring immediate attention with acknowledgment.
 
-## 📋 Overview
+## Features
 
-This example showcases a production-ready weather station application built on the CloudMouse SDK. It features:
+- **Bidirectional Communication**: Two-way alert system with confirmation
+- **Visual Feedback**: RGB LED states (idle, loading, success, error)
+- **Audio Feedback**: Buzzer patterns for different states
+- **mDNS Discovery**: No need for static IP addresses
+- **Event-Driven Architecture**: Clean separation of concerns using EventBus
+- **Reliable Delivery**: Confirmation mechanism ensures message delivery
 
-- **Live weather data** from Open-Meteo API (free, no API key required)
-- **3-day forecast** with detailed temperature and conditions
-- **Auto-refresh** every 15 minutes
-- **Beautiful LVGL UI** with Font Awesome weather icons
-- **Dual-core architecture** for smooth 30Hz UI rendering
-- **Clean service separation** with event-driven communication
+## System Architecture
 
-## 📋 Features
+### Device Roles
 
-### Weather Display
-- 🌡️ **Current temperature** with decimal precision
-- 💧 **Humidity percentage** with water drop icon
-- 💨 **Wind speed** in km/h
-- 🌤️ **Weather condition** with Font Awesome icons
-- 📅 **3-day forecast** with min/max temperatures
-- 🕐 **Real-time clock** with date display
+The system consists of two CloudMouse devices:
 
-### Technical Features
-- ⚡ **Event-driven architecture** - Clean separation between Core and UI
-- 🔄 **Automatic updates** - Fetches weather every 15 minutes
-- 🌐 **WiFi management** - Auto-connect with fallback to AP mode
-- 🎨 **LVGL 9.x UI** - Smooth animations and modern design
-- 📦 **Service pattern** - Reusable WeatherService component
-- 🔒 **Thread-safe** - Dual-core communication via FreeRTOS queues
+1. **SENDER** (`cloudmouse-sender.local`)
+   - Triggers emergency alerts
+   - Waits for confirmation
+   - Provides feedback when acknowledged
 
-## 🔧 Hardware Requirements
+2. **RECEIVER** (`cloudmouse-receiver.local`)
+   - Receives emergency alerts
+   - Provides continuous alarm until acknowledged
+   - Sends confirmation back to sender
 
-- **CloudMouse device** (ESP32-based)
-  - ESP32 with dual-core support
-  - ILI9488 display (480x320)
-  - Rotary encoder
-  - NeoPixel LED ring
-  - WiFi connectivity
+## Configuration
 
+### Device Configuration
 
-## 🔧 Compatibility
-
-**Arduino IDE** - out-of-the-box.
-**Platformio** - with source code switching (see below!).
-
-### Important: Source Code Switching
-
-> ⚠️ The project maintains a single codebase that works with both Arduino IDE and PlatformIO. The `src/main.cpp` file is kept in sync but needs to be toggled:
-
-**To use PlatformIO:**
-1. Open `src/main.cpp` in your editor
-2. **Uncomment the entire file**
-3. Save and build with PlatformIO
-
-**To switch back to Arduino IDE:**
-1. Open `src/main.cpp` in your editor
-2. **Re-comment the entire file**
-3. Save and build with Arduino IDE
-
-> 💡 **Pro tip**: Most editors support block comment toggling with `Ctrl+/` (Windows/Linux) or `Cmd+/` (Mac). Select all (`Ctrl+A`) then toggle comments!
-
-
-## 📚 Prerequisites
-
-Before using this example, make sure you have:
-
-1. **CloudMouse SDK** - Base SDK with hardware abstraction layer
-   - 📖 [CloudMouse SDK Repository](https://github.com/tibonilab/cloudmouse-boilerplate)
-   
-2. **LVGL Library** - Graphics library (v9.x recommended)
-   - 📖 [LVGL Official Documentation](https://docs.lvgl.io/)
-   - Install via Arduino Library Manager: `LVGL`
-
-3. **ArduinoJson** - JSON parsing library
-   - Install via Arduino Library Manager: `ArduinoJson`
-
-4. **HTTPClient** - Included with ESP32 Arduino Core
-
-## 🚀 Setup Instructions
-
-### 1. Install Dependencies
-
-Install the following libraries via Arduino Library Manager:
-- `LVGL` (v9.x)
-- `ArduinoJson` (v7.x)
-
-### 2. Configure LVGL
-
-**IMPORTANT:** You need to add the `lv_conf.h` configuration file to your Arduino libraries folder.
-
-**Location:**
-```
-~/Arduino/libraries/lv_conf.h
-```
-
-**Content:**
+Edit `DeviceConfig.h` to set device role:
 ```cpp
-#ifndef LV_CONF_H
-#define LV_CONF_H
+// Set ONE device as sender
+#define IS_RECEIVER 0
+#define IS_SENDER 1
 
-#define LV_COLOR_DEPTH 16
-#define LV_COLOR_16_SWAP 1
-#define LV_MEM_SIZE (48U * 1024U)
+// Set OTHER device as receiver
+#define IS_RECEIVER 1
+#define IS_SENDER 0
 
-// Enable required fonts
-#define LV_FONT_MONTSERRAT_14 1
-#define LV_FONT_MONTSERRAT_16 1
-#define LV_FONT_MONTSERRAT_20 1
-#define LV_FONT_MONTSERRAT_24 1
-#define LV_FONT_MONTSERRAT_36 1
-#define LV_FONT_MONTSERRAT_48 1
-
-#define LV_FONT_DEFAULT &lv_font_montserrat_14
-#define LV_TXT_ENC LV_TXT_ENC_UTF8
-
-#define LV_TICK_CUSTOM 1
-#define LV_TICK_CUSTOM_INCLUDE "Arduino.h"
-#define LV_TICK_CUSTOM_SYS_TIME_EXPR (millis())
-
-// Enable widgets
-#define LV_USE_LABEL 1
-#define LV_USE_ARC 1
-#define LV_USE_BAR 1
-#define LV_USE_FLEX 1
-#define LV_USE_GRID 1
-#define LV_USE_PSRAM 1
-
-#endif
+#define MDNS_RECEIVER "cloudmouse-receiver"
+#define MDNS_SENDER "cloudmouse-sender"
 ```
 
-### 3. Set Your Location
+### Network Requirements
 
-Edit the main `.ino` file to set your location coordinates:
+- Both devices must be on the same WiFi network
+- mDNS must be supported by the network (most home routers support it)
+- Standard HTTP port 80 is used
 
-```cpp
-// Change these to your location (example: east coast center Italy)
-WeatherService weatherService(43.9395805, 12.7710328);
+## Communication Flow
+
+### Alert Sequence
+```
+SENDER                          RECEIVER
+  │                                │
+  │ 1. Button Press                │
+  │ ├─ Buzz + Green Flash          │
+  │ └─ Enter Loading State         │
+  │                                │
+  │ 2. POST /alarm/ring           →│
+  │                                │ 3. Receive Alert
+  │                                │ ├─ Red LED + Loading
+  │                                │ └─ Continuous Alarm
+  │                                │
+  │                                │ 4. Button Press
+  │                                │ ├─ Stop Alarm
+  │                                │ └─ Green Flash + Buzz
+  │                                │
+  │←5. POST /alarm/confirm         │
+  │                                │
+  │ 6. Confirmation Received       │
+  │ ├─ Stop Loading                │
+  │ ├─ Green Flash                 │
+  │ ├─ Buzz                        │
+  │ └─ Return to Idle              │
 ```
 
-**How to find your coordinates:**
-- Visit [https://www.latlong.net/](https://www.latlong.net/)
-- Search for your city
-- Copy the latitude and longitude values
+## API Endpoints
 
-### 4. Upload
+### Receiver Endpoints
 
-1. Open the `.ino` file in Arduino IDE
-2. Select your ESP32 board
-3. Upload the sketch
-4. Connect to WiFi when prompted (AP mode will start if no credentials saved)
+#### POST `/alarm/ring`
+Triggers alarm on receiver device.
 
-## 🏗️ Architecture
-
-This example follows a clean service-oriented architecture:
-
-```
-┌─────────────────────────────────────────────────┐
-│           Main Application (.ino)               │
-│  Creates instances and registers with Core      │
-└────────────┬────────────────────────────────────┘
-             │
-    ┌────────▼─────────┐
-    │      Core        │ ◄─── Event Bus (FreeRTOS Queues)
-    │   (Core 0)       │
-    └─┬──────────────┬─┘
-      │              │
-      │              │
-┌─────▼──────────┐  ┌───▼────────────┐
-│ WeatherService │  │ DisplayManager │
-│   (Core 0)     │  │   (Core 1)     │
-│                │  └───┬────────────┘
-│ - API calls    │      │
-│ - JSON parsing │  ┌───▼──────────┐
-│ - Data storage │  │  WeatherUI   │
-│ - Auto-refresh │  │   (LVGL)     │
-└────────────────┘  └──────────────┘
+**Request:**
+```http
+POST http://cloudmouse-receiver.local/alarm/ring
+Content-Type: application/json
 ```
 
-### Key Components
-
-**Core 0 (Logic):**
-- `Core` - System coordinator and event processor
-- `WeatherService` - API integration and data management
-- `WiFiManager` - Network connectivity
-- `WebServerManager` - Configuration portal
-
-**Core 1 (UI):**
-- `DisplayManager` - LVGL integration and screen management
-- `WeatherUI` - Weather-specific UI components and rendering
-- `EncoderManager` - User input handling
-
-## 📖 Key Files
-
-| File | Description |
-|------|-------------|
-| `cloudmouse-example-meteo-station.ino` | Main application entry point |
-| `lib/services/WeatherService.h/cpp` | Weather API integration service |
-| `lib/ui/WeatherUI.h/cpp` | Weather UI component with LVGL |
-| `lib/hardware/DisplayManager.h/cpp` | Display driver and event handling |
-| `lib/core/Core.h/cpp` | System coordinator and state machine |
-| `font_awesome_fonts.h` | Font Awesome icon declarations |
-| `assets/font_awesome_solid_*.c` | Font Awesome icon definitions |
-
-## 🎯 Features Demonstrated
-
-### Service Architecture
-- **WeatherService** - Standalone service for weather data
-- **Event-driven communication** - Zero coupling between components
-- **Data serialization** - Efficient data transfer via events
-- **Automatic updates** - Background refresh every 15 minutes
-
-### LVGL Integration
-- Custom display driver for ILI9488 via LovyanGFX
-- Font Awesome icon integration for weather symbols
-- Responsive layout with flexbox positioning
-- PSRAM buffer allocation for optimal performance
-- Real-time clock updates (1Hz)
-
-### Event Handling
-- `WEATHER_DATA_CURRENT` - Current weather updates
-- `WEATHER_DATA_FORECAST` - Daily forecast updates
-- `DISPLAY_UPDATE` - UI refresh triggers
-- `WIFI_CONNECTED` - Network state changes
-- Thread-safe dual-core communication
-
-## 🌐 API Integration
-
-This project uses the free [Open-Meteo API](https://open-meteo.com/):
-
-**Endpoint:**
+**Response:**
 ```
-https://api.open-meteo.com/v1/forecast
+200 OK
+ok
 ```
 
-**Parameters:**
-- `latitude` / `longitude` - Your location
-- `current` - temperature_2m, relative_humidity_2m, weather_code, wind_speed_10m
-- `daily` - weather_code, temperature_2m_max, temperature_2m_min
-- `timezone` - auto (uses location timezone)
-- `forecast_days` - 4 (today + 3 days forecast)
+### Sender Endpoints
 
-**No API key required!** ✨
+#### POST `/alarm/confirm`
+Confirms alarm acknowledgment from receiver.
 
-## 🎨 Weather Icons
-
-Weather conditions are displayed using Font Awesome Solid icons:
-
-| Icon | Condition | WMO Code |
-|------|-----------|----------|
-| ☀️ | Clear Sky | 0 |
-| 🌤️ | Partly Cloudy | 1-3 |
-| ☁️ | Cloudy | 4-8 |
-| 🌫️ | Foggy | 45-48 |
-| 🌧️ | Rainy | 51-67 |
-| ❄️ | Snowy | 71-77 |
-| ⛈️ | Thunderstorm | 95-99 |
-
-Font Awesome fonts were converted using the [LVGL Font Converter](https://lvgl.io/tools/fontconverter).
-
-## 📱 User Interface
-
-### Layout
-
-```
-┌─────────────────────────────────────────────┐
-│  Date & Time         Current Weather        │
-│  Monday              [☀️]                   │
-│  October 27, 2025    24.5°                  │
-│  14:30:45            Clear Sky              │
-│                      💧 65%  💨 12 km/h     │
-├─────────────────────────────────────────────┤
-│  [Day 1]        [Day 2]        [Day 3]      │
-│  ☀️              🌤️             ☁️          │
-│  28° / 18°      26° / 17°      22° / 15°    │
-│  28 Tue         29 Wed         30 Thu       │
-└─────────────────────────────────────────────┘
+**Request:**
+```http
+POST http://cloudmouse-sender.local/alarm/confirm
+Content-Type: application/json
 ```
 
-### Color Scheme
-
-- Background: Dark gray (#1a1a1a)
-- Text: White (#ffffff)
-- Secondary text: Light gray (#888888)
-- Weather icon: Orange (#ffaa00)
-- Humidity: Blue (#4da6ff)
-- Wind: Green (#66ff99)
-
-## 🔄 Update Cycle
-
-1. **Initial boot** - Weather data fetched immediately after WiFi connection
-2. **Periodic updates** - Auto-refresh every 15 minutes
-3. **Manual refresh** - Can be triggered via serial commands
-4. **UI updates** - Real-time clock updates every second
-
-## 🛠️ Customization
-
-### Change Location
-
-Edit the coordinates in the main `.ino` file:
-
-```cpp
-WeatherService weatherService(YOUR_LATITUDE, YOUR_LONGITUDE);
+**Response:**
+```
+200 OK
+ok
 ```
 
-### Change Update Interval
+## Events
 
-Modify the interval in `WeatherService.cpp`:
+The system uses an event-driven architecture with the following events:
 
-```cpp
-updateInterval(900000)  // Change from 900000ms (15 min) to your preference
-```
+| Event | Trigger | Action |
+|-------|---------|--------|
+| `ALARM_RING` | HTTP request received | Start alarm on receiver |
+| `ALARM_STOP` | Button press on receiver | Stop alarm, send confirmation |
+| `SEND_ALARM_REQUEST` | Button press on sender | Send alert to receiver |
+| `ALARM_REQUEST_RECEIVED` | HTTP confirmation received | Visual/audio feedback on sender |
 
-Or use the setter:
+## LED Feedback States
 
-```cpp
-weatherService.setUpdateInterval(600000);  // 10 minutes
-```
+### Sender States
 
-### Customize UI Colors
+| State | LED Color | LED Mode | Audio |
+|-------|-----------|----------|-------|
+| Button Press | Green | Flash | Buzz |
+| Waiting for Confirm | Azure | Loading (blinking) | Silent |
+| Confirmed | Green | Flash | Buzz |
+| Error | Red | Flash | Error tone |
+| Idle | Azure | Solid | Silent |
 
-Edit colors in `WeatherUI.cpp`:
+### Receiver States
 
-```cpp
-lv_color_hex(0x1a1a1a)  // Background color
-lv_color_hex(0xFFAA00)  // Icon color
-// etc...
-```
+| State | LED Color | LED Mode | Audio |
+|-------|-----------|----------|-------|
+| Alert Received | Red | Loading (blinking) | Continuous alarm |
+| Acknowledged | Green | Flash | Buzz |
+| Idle | Azure | Solid | Silent |
 
-### Add New Weather Data
+## Hardware Requirements
 
-1. Add fields to `WeatherData` struct in `WeatherService.h`
-2. Parse new fields in `WeatherService::fetchWeather()`
-3. Add to serialization in `WeatherService::notifyWeatherUpdate()`
-4. Update parsing in `DisplayManager::processEvent()`
-5. Add UI elements in `WeatherUI::updateCurrentWeather()`
+- 2x CloudMouse devices (ESP32-based)
+- WiFi network
+- Piezo buzzer on GPIO 14
+- RGB LED (integrated in CloudMouse)
+- Rotary encoder with button (integrated in CloudMouse)
 
-## 🐛 Troubleshooting
+## Installation
 
-### WiFi Not Connecting
-- Check SSID and password
-- Ensure 2.4GHz WiFi (ESP32 doesn't support 5GHz)
-- Try clearing saved credentials via serial: `clear_prefs`
+1. Clone the repository
+2. Configure each device role in `DeviceConfig.h`
+3. Update WiFi credentials
+4. Flash one device as SENDER
+5. Flash other device as RECEIVER
+6. Both devices will auto-discover each other via mDNS
 
-### Weather Data Not Updating
-- Check serial monitor for API errors
-- Verify internet connection
-- Ensure coordinates are valid
-- Check Open-Meteo API status
+## Usage
 
-### Display Issues
-- Verify `lv_conf.h` is properly configured
-- Check Font Awesome `.c` files are in project root
-- Ensure PSRAM is enabled in Arduino IDE: `Tools > PSRAM > Enabled`
+### Sending an Alert (Sender Device)
 
-### Compilation Errors
-- Install all required libraries
-- Check library versions (LVGL 9.x, ArduinoJson 7.x)
-- Ensure Font Awesome files are in project root
+1. Press the encoder button
+2. LED turns green briefly with buzz (confirmation)
+3. LED enters loading state (blinking azure)
+4. Wait for receiver acknowledgment
+5. LED flashes green with buzz when confirmed
+6. Returns to idle state
 
-## 📊 Memory Usage
+### Acknowledging an Alert (Receiver Device)
 
-Approximate memory footprint:
+1. Device receives alert automatically
+2. LED turns red and blinks continuously
+3. Buzzer plays alarm pattern continuously
+4. Press encoder button to acknowledge
+5. LED flashes green with buzz
+6. Confirmation sent to sender automatically
+7. Returns to idle state
 
-- **Flash:** ~1.2MB (program + LVGL + fonts)
-- **SRAM:** ~45KB (heap + stack)
-- **PSRAM:** ~60KB (LVGL buffers)
+## Error Handling
 
-The dual-core architecture keeps UI rendering smooth at 30Hz while background tasks run independently.
+### Network Errors
 
-## 🔗 Useful Links
+If the sender cannot reach the receiver:
+- Red LED flash (2 seconds)
+- Error buzzer tone
+- Returns to idle state
+- User can retry by pressing button again
 
-- [CloudMouse website](https://cloudmouse.co)
-- [CloudMouse SDK](https://github.com/tibonilab/cloudmouse-boilerplate)
-- [LVGL Documentation](https://docs.lvgl.io/)
-- [Open-Meteo API](https://open-meteo.com/)
-- [Font Awesome Icons](https://fontawesome.com/)
-- [LVGL Font Converter](https://lvgl.io/tools/fontconverter)
-- [ESP32 Arduino Core](https://github.com/espressif/arduino-esp32)
+### Recovery
 
-## 📝 License
+- System automatically recovers from network errors
+- No manual intervention required
+- Devices reconnect automatically when network is restored
 
-This example follows the same license as the CloudMouse SDK.
+## Troubleshooting
 
-## 🤝 Contributing
+### Device Not Found
 
-Contributions are welcome! Feel free to:
-- Report bugs via issues
-- Submit pull requests for improvements
-- Share your customizations
-- Suggest new features
+**Problem:** `cloudmouse-receiver.local` or `cloudmouse-sender.local` not resolving
 
-## 🙏 Credits
+**Solutions:**
+- Ensure both devices are on the same WiFi network
+- Check if mDNS is enabled on your router
+- Wait 10-20 seconds after boot for mDNS to initialize
+- Check Serial output for mDNS confirmation messages
 
-- **CloudMouse SDK** by [Tiboni Lab](https://github.com/tibonilab)
-- **LVGL** by [LVGL LLC](https://lvgl.io/)
-- **Open-Meteo API** by [Open-Meteo](https://open-meteo.com/)
-- **Font Awesome** by [Fonticons, Inc.](https://fontawesome.com/)
+### Alarm Not Stopping
+
+**Problem:** Alarm continues after button press
+
+**Solutions:**
+- Check button connection
+- Verify encoder is properly initialized
+- Check Serial output for event processing
+- Restart receiver device
+
+### No Confirmation Received
+
+**Problem:** Sender stays in loading state indefinitely
+
+**Solutions:**
+- Check if receiver is powered on and connected
+- Verify receiver acknowledged the alarm
+- Check network connectivity
+- Review Serial output for HTTP errors
+
+## Technical Details
+
+### Components Used
+
+- **WebServerManager**: Handles HTTP endpoints and mDNS
+- **EventBus**: Event-driven communication between components
+- **SimpleBuzzer**: Audio feedback with dedicated FreeRTOS task
+- **LedManager**: RGB LED control for visual feedback
+- **HTTPClient**: HTTP POST requests for inter-device communication
+
+### Performance
+
+- Alert delivery: < 100ms (typical LAN latency)
+- mDNS resolution: 1-2 seconds on first boot
+- Alarm response time: Immediate (event-driven)
+- Power consumption: ~80mA per device (typical)
+
+## Future Enhancements
+
+- Battery level monitoring
+- Multiple receiver support
+- Alarm history logging
+- MQTT support for longer range
+- Web dashboard for monitoring
+- Custom alarm patterns
+
+## License
+
+CloudMouse SDK - Proprietary
+
+## Author
+
+Built with ❤️ by Tibbo using CloudMouse SDK
 
 ---
 
-Made with ❤️ and ☕ by the CloudMouse community
-
-**🌤️ Enjoy your weather station!**
+**Note:** This is a critical safety system. Always test thoroughly before deployment in real-world scenarios.

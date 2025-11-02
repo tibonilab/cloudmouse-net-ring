@@ -46,6 +46,13 @@
 
 namespace CloudMouse
 {
+
+  #define IS_RECEIVER 0
+  #define IS_SENDER 1
+
+  #define MDNS_RECEIVER "cloudmouse-receiver"
+  #define MDNS_SENDER "cloudmouse-sender"
+
 // ============================================================================
 // HARDWARE PCB VERSION CONFIGURATION
 // ============================================================================

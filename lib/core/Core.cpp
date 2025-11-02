@@ -6,6 +6,7 @@
  */
 
 #include "./Core.h"
+#include <HTTPClient.h>
 
 namespace CloudMouse
 {
@@ -58,6 +59,9 @@ namespace CloudMouse
       {
         ledManager->startAnimationTask();
       }
+
+      // Start Buzzer task
+      SimpleBuzzer::startTask();
     }
     else
     {
@@ -109,6 +113,10 @@ namespace CloudMouse
     {
       wifi->update();
       handleWiFiConnection();
+
+      if (webServer) {
+        webServer->update();
+      }
     }
 
     // Web server updates when in AP mode
@@ -226,6 +234,13 @@ namespace CloudMouse
             EventBus::instance().sendToUI(helloEvent);
         }
         
+        if (webServer) 
+        {
+          
+          delay(50);
+          webServer->initLanServices();
+        }
+
         setState(SystemState::READY);
       }
       break;
@@ -307,6 +322,7 @@ namespace CloudMouse
   void Core::processEvents()
   {
     Event event;
+    HTTPClient http;
 
     // Process all pending events from UI task
     while (EventBus::instance().receiveFromUI(event, 0))
@@ -325,6 +341,67 @@ namespace CloudMouse
 
       case EventType::ENCODER_LONG_PRESS:
         handleEncoderLongPress(event);
+        break;
+
+      case EventType::ALARM_RING:
+        if (ledManager) {
+          ledManager->setMainColor("red");
+          ledManager->setLoadingState(true);
+        }
+
+        SimpleBuzzer::alarmStart();
+        break;
+
+      case EventType::ALARM_STOP:
+        if (ledManager) {
+          ledManager->setMainColor("azure");
+          ledManager->setLoadingState(false);
+        }
+
+        SimpleBuzzer::alarmStop();
+
+        http.begin("http://" MDNS_SENDER ".local/alarm/confirm");
+        http.POST("");
+        http.end();
+
+        break;
+
+      case EventType::SEND_ALARM_REQUEST: {  
+        if (ledManager)
+        {
+          ledManager->setLoadingState(true);
+        }
+
+        http.begin("http://" MDNS_RECEIVER ".local/alarm/ring");
+        int httpCode = http.POST("");
+        
+        if (httpCode > 0) {
+          // Serial.printf("Response: %d\n", httpCode);
+          // String payload = http.getString();
+          // Serial.println(payload);
+        } else {
+          Serial.printf("Error: %s\n", http.errorToString(httpCode).c_str());
+
+          if (ledManager)
+          {
+            ledManager->setLoadingState(false);
+            ledManager->flashColor(255, 0, 0, 200, 2000);
+          }
+          SimpleBuzzer::error();
+        }
+        
+        http.end();
+        break;
+      }
+
+      case EventType::ALARM_REQUEST_RECEIVED:
+        if (ledManager)
+        {
+          ledManager->setLoadingState(false);
+          ledManager->flashColor(0, 255, 0, 255, 200);
+        }
+
+        SimpleBuzzer::buzz();
         break;
 
       default:
@@ -363,6 +440,16 @@ namespace CloudMouse
 
     // Forward to UI system
     EventBus::instance().sendToUI(event);
+
+    if (IS_SENDER) {
+      Event alarmEvent(EventType::SEND_ALARM_REQUEST);
+      EventBus::instance().sendToMain(alarmEvent);
+    }
+
+    if (IS_RECEIVER) {
+      Event alarmEvent(EventType::ALARM_STOP);
+      EventBus::instance().sendToMain(alarmEvent);
+    }
   }
 
   void Core::handleEncoderLongPress(const Event &event)

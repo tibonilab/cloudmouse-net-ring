@@ -199,6 +199,12 @@ enum class EventType {
     // Weather events
     WEATHER_DATA_CURRENT,   // Current weather data update
     WEATHER_DATA_FORECAST,  // Forecast data update (one day)
+
+    // Alarm events
+    ALARM_RING,             // start alarm ringing
+    ALARM_STOP,             // stop alarm ringing
+    SEND_ALARM_REQUEST,     // send an alarm request
+    ALARM_REQUEST_RECEIVED, // alarm request confirmation by the received
 };
 
 /**

@@ -6,7 +6,6 @@
  */
 
 #include "./WebServerManager.h"
-#include "../prefs/PreferencesManager.h"
 
 namespace CloudMouse::Network
 {
@@ -38,6 +37,32 @@ namespace CloudMouse::Network
 
         Serial.println("✅ WebServer started on port 80");
         Serial.println("🌐 Access configuration at: http://192.168.4.1");
+    }
+
+    void WebServerManager::initLanServices()
+    {
+        if (IS_RECEIVER)
+        {
+            if (MDNS.begin(MDNS_RECEIVER))
+            {
+                Serial.print("mDNS responder started: ");
+                Serial.println(MDNS_RECEIVER);
+            }
+            webServer.on("/alarm/ring", HTTP_POST, handleAlarmRing);
+        }
+
+        if (IS_SENDER)
+        {
+            if (MDNS.begin(MDNS_SENDER))
+            {
+                Serial.print("mDNS responder started: ");
+                Serial.println(MDNS_SENDER);
+            }
+            webServer.on("/alarm/confirm", HTTP_POST, handleAlarmConfirmed);
+        }
+
+        webServer.begin();
+        serverRunning = true;
     }
 
     void WebServerManager::update()
@@ -320,4 +345,21 @@ namespace CloudMouse::Network
         // Handle requests to undefined routes
         instance->webServer.send(404, "text/plain", "Page not found");
     }
+
+    void WebServerManager::handleAlarmRing()
+    {
+        Event alarmEvent(EventType::ALARM_RING);
+        EventBus::instance().sendToMain(alarmEvent);
+
+        instance->webServer.send(200, "text/plain", "ok");
+    }
+
+    void WebServerManager::handleAlarmConfirmed()
+    {
+        Event alarmEvent(EventType::ALARM_REQUEST_RECEIVED);
+        EventBus::instance().sendToMain(alarmEvent);
+
+        instance->webServer.send(200, "text/plain", "ok");
+    }
+
 } // namespace CloudMouse::Network

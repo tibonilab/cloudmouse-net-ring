@@ -10,6 +10,7 @@
  * - Configurable frequency, duration, and duty cycle parameters
  * - Non-blocking sound generation with microsecond timing precision
  * - Low-level GPIO control for compatibility with various buzzer types
+ * - Dedicated FreeRTOS task for smooth alarm playback
  *
  * Hardware Requirements:
  * - Piezo buzzer or passive speaker connected to GPIO pin 14
@@ -17,9 +18,10 @@
  *
  * Usage:
  * 1. Call init() during system initialization
- * 2. Use buzz() for positive feedback (button clicks, confirmations)
- * 3. Use error() for negative feedback (failures, warnings)
- * 4. Use buzzWithPWM() for custom sound patterns
+ * 2. Call startTask() to launch dedicated buzzer task
+ * 3. Use buzz() for positive feedback (button clicks, confirmations)
+ * 4. Use error() for negative feedback (failures, warnings)
+ * 5. Use alarmStart()/alarmStop() for continuous alarm patterns
  */
 
 #ifndef SIMPLE_BUZZER_H
@@ -32,9 +34,92 @@
 
 namespace CloudMouse::Hardware
 {
-
     class SimpleBuzzer
     {
+    private:
+      inline static bool alarmActive = false;
+      inline static unsigned long lastAlarmTime = 0;
+      inline static int alarmStep = 0;
+      inline static TaskHandle_t buzzerTaskHandle = NULL;
+
+        /**
+         * Buzzer task handler (runs on dedicated core)
+         * Manages alarm sound generation without blocking main loop
+         */
+        static void buzzerTask(void* parameter)
+        {
+            while(true) {
+                update();
+                vTaskDelay(pdMS_TO_TICKS(10)); // 10ms tick
+            }
+        }
+
+        /**
+         * Update alarm state (internal, called by task)
+         * Handles active alarm sound generation (non-blocking)
+         */
+        static void update()
+        {
+            if (!alarmActive) {
+                alarmStep = 0;
+                return;
+            }
+            
+            unsigned long now = millis();
+            unsigned long elapsed = now - lastAlarmTime;
+            
+            switch(alarmStep) {
+                case 0: // bi
+                    if (elapsed >= 0) {
+                        buzzWithPWM(1000, 150, 15);
+                        lastAlarmTime = now;
+                        alarmStep++;
+                    }
+                    break;
+                case 1: // pausa
+                    if (elapsed >= 250) {
+                        alarmStep++;
+                    }
+                    break;
+                case 2: // bi
+                    if (elapsed >= 250) {
+                        buzzWithPWM(1000, 150, 15);
+                        lastAlarmTime = now;
+                        alarmStep++;
+                    }
+                    break;
+                case 3: // pausa
+                    if (elapsed >= 250) {
+                        alarmStep++;
+                    }
+                    break;
+                case 4: // bi
+                    if (elapsed >= 250) {
+                        buzzWithPWM(1000, 150, 15);
+                        lastAlarmTime = now;
+                        alarmStep++;
+                    }
+                    break;
+                case 5: // pausa
+                    if (elapsed >= 250) {
+                        alarmStep++;
+                    }
+                    break;
+                case 6: // biiiiip
+                    if (elapsed >= 250) {
+                        buzzWithPWM(1000, 400, 15);
+                        lastAlarmTime = now;
+                        alarmStep++;
+                    }
+                    break;
+                case 7: // pausa lunga
+                    if (elapsed >= 1200) {
+                        alarmStep = 0; // ricomincia
+                    }
+                    break;
+            }
+        }
+
     public:
         /**
          * Initialize buzzer hardware
@@ -44,7 +129,46 @@ namespace CloudMouse::Hardware
         static void init()
         {
             pinMode(BUZZER_PIN, OUTPUT);
-            digitalWrite(BUZZER_PIN, LOW); // Ensure buzzer starts silent
+            digitalWrite(BUZZER_PIN, LOW);
+        }
+
+        /**
+         * Start dedicated buzzer task
+         * Launches FreeRTOS task on Core 1 for alarm management
+         * Call after init() during system setup
+         */
+        static void startTask()
+        {
+            xTaskCreatePinnedToCore(
+                buzzerTask,           // Task function
+                "BuzzerTask",         // Task name
+                2048,                 // Stack size
+                NULL,                 // Parameters
+                1,                    // Priority
+                &buzzerTaskHandle,    // Task handle
+                1                     // Core 1
+            );
+        }
+
+        /**
+         * Start alarm sound pattern
+         * Continuous alternating tone loop until stopped
+         * Use for: emergency alerts, critical notifications
+         * Call alarmStop() to silence
+         */
+        static void alarmStart()
+        {
+            alarmActive = true;
+        }
+
+        /**
+         * Stop alarm sound
+         * Silences any active alarm pattern
+         */
+        static void alarmStop()
+        {
+            alarmActive = false;
+            silence();
         }
 
         /**
@@ -57,9 +181,9 @@ namespace CloudMouse::Hardware
          */
         static void buzz()
         {
-            buzzWithPWM(740, 75, 20); // High tone
-            buzzWithPWM(120, 75, 20); // Low tone
-            buzzWithPWM(270, 75, 20); // Medium tone
+            buzzWithPWM(740, 75, 20);
+            buzzWithPWM(120, 75, 20);
+            buzzWithPWM(270, 75, 20);
         }
 
         /**
@@ -72,12 +196,12 @@ namespace CloudMouse::Hardware
          */
         static void error()
         {
-            buzzWithPWM(230, 75, 20); // Alert tone 1
-            buzzWithPWM(120, 75, 20); // Alert tone 2
-            buzzWithPWM(230, 75, 20); // Alert tone 1
-            buzzWithPWM(120, 75, 20); // Alert tone 2
-            buzzWithPWM(230, 75, 20); // Alert tone 1
-            buzzWithPWM(120, 75, 20); // Alert tone 2
+            buzzWithPWM(230, 75, 20);
+            buzzWithPWM(120, 75, 20);
+            buzzWithPWM(230, 75, 20);
+            buzzWithPWM(120, 75, 20);
+            buzzWithPWM(230, 75, 20);
+            buzzWithPWM(120, 75, 20);
         }
 
         /**
@@ -96,18 +220,16 @@ namespace CloudMouse::Hardware
          */
         static void buzzWithPWM(int frequency, int duration, int dutyCycle)
         {
-            // Calculate PWM timing parameters
-            int period = 1000000 / frequency;       // Period in microseconds
-            int pulse = (period * dutyCycle) / 100; // High pulse duration
+            int period = 1000000 / frequency;
+            int pulse = (period * dutyCycle) / 100;
 
-            // Generate PWM signal for specified duration
             unsigned long startTime = millis();
             while (millis() - startTime < duration)
             {
                 digitalWrite(BUZZER_PIN, HIGH);
-                delayMicroseconds(pulse); // High phase
+                delayMicroseconds(pulse);
                 digitalWrite(BUZZER_PIN, LOW);
-                delayMicroseconds(period - pulse); // Low phase
+                delayMicroseconds(period - pulse);
             }
         }
 
@@ -147,4 +269,5 @@ namespace CloudMouse::Hardware
         }
     };
 };
+
 #endif
