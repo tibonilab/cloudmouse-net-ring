@@ -65,7 +65,7 @@ SENDER                          RECEIVER
   │ ├─ Buzz + Green Flash          │
   │ └─ Enter Loading State         │
   │                                │
-  │ 2. POST /alarm/ring ---------→ │
+  │ 2. POST /alarm/ring ---------> │
   │                                │ 3. Receive Alert
   │                                │ ├─ Red LED + Loading
   │                                │ └─ Continuous Alarm
@@ -74,7 +74,7 @@ SENDER                          RECEIVER
   │                                │ ├─ Stop Alarm
   │                                │ └─ Green Flash + Buzz
   │                                │
-  │ ←----------------------------- │ 5. POST /alarm/confirm
+  │ <----------------------------- │ 5. POST /alarm/confirm
   │                                │
   │ 6. Confirmation Received       │
   │ ├─ Stop Loading                │
